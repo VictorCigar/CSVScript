@@ -1,4 +1,6 @@
 import csv
+import re
+
 from typing import List, Dict, Tuple, Any
 
 
@@ -114,6 +116,53 @@ def filter_rows_by_column_prefix(
             return val.startswith(prefix_cmp)
 
     filtered = [r for r in rows if starts(r.get(column_name, ""))]
+
+    if output_path:
+        with open(output_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+            writer.writeheader()
+            writer.writerows(filtered)
+        print(f"Wrote {len(filtered)} rows to {output_path}")
+
+    return filtered
+
+
+def filter_rows_name_matches_cuba(
+    file_path: str,
+    output_path: str | None = None,
+    column_name: str = "Name",
+) -> List[Dict[str, str]]:
+    """Filter rows whose name contains Cuba variants (cuba/cuban/cubana...).
+
+    Matches case-insensitively on word starts: any token beginning with 'cuba'.
+    Examples that match: "Cuba", "Cuban", "Cubana", "Cubanito".
+
+    Args:
+        file_path: CSV to read.
+        output_path: Optional CSV file to write results.
+        column_name: Column to inspect (default 'Name').
+
+    Returns:
+        List of matching row dicts.
+    """
+
+    rows = read_csv(file_path)
+    if not rows:
+        print("No rows in file.")
+        return []
+    if column_name not in rows[0]:
+        raise ValueError(f"Column '{column_name}' not found in {file_path}")
+
+    # Regex: word boundary then 'cuba' followed by zero or more word chars
+    # Case-insensitive. This captures cuba, cuban, cubana, etc.
+    pattern = re.compile(r"\b(cuba\w*)\b", re.IGNORECASE)
+
+    def matches(val: str) -> bool:
+        if not val:
+            return False
+        return pattern.search(val) is not None
+
+    filtered = [r for r in rows if matches(r.get(column_name, ""))]
 
     if output_path:
         with open(output_path, "w", newline="", encoding="utf-8") as f:
@@ -278,13 +327,14 @@ def main() -> None:
     # )
     # print(f"Found {len(prefix_filtered)} rows with Name starting '77'.\n")
 
-    matched, unmatched = filter_rows_by_column_value(
-        "names_starting_77.csv",
-        value = "77",
-        matched_output = "Products_With_Brand_77_Att.csv",
-        unmatched_output = "Products_Without_Brand_77_Att.csv"
-    )
-    print(f"Found {len(matched)} rows with 77 and {len(unmatched)} rows without 77.\n")
+    # matched, unmatched = filter_rows_by_column_value(
+    #     "names_starting_77.csv",
+    #     value = "77",
+    #     matched_output = "Products_With_Brand_77_Att.csv",
+    #     unmatched_output = "Products_Without_Brand_77_Att.csv"
+    # )
+    # print(f"Found {len(matched)} rows with 77 and {len(unmatched)} rows without 77.\n")
+    
 
     # Example 2: compare two CSVs by key and columns
     # file1 = "file1.csv"
@@ -302,6 +352,13 @@ def main() -> None:
     #     only_in_1_output="only_in_file1.csv",
     #     only_in_2_output="only_in_file2.csv",
     # )
+
+    cuba_matches = filter_rows_name_matches_cuba(
+        "cuba.csv",
+        output_path="cuba_matches.csv",
+        column_name="Name",
+    )
+    print(f"Found {len(cuba_matches)} rows matching Cuba variants in Name.\n")
 
 
 if __name__ == "__main__":
